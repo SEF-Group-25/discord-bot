@@ -35,29 +35,41 @@ class ErrorHandlerTests(unittest.IsolatedAsyncioTestCase):
         test_cases = (
             {
                 "try_silence_return": True,
+                "try_run_fixed_codeblock_return": False,
                 "called_try_get_tag": False
             },
             {
                 "try_silence_return": False,
+                "try_run_fixed_codeblock_return": False,
                 "called_try_get_tag": False
             },
             {
                 "try_silence_return": False,
+                "try_run_fixed_codeblock_return": False,
+                "called_try_get_tag": True
+            },
+            {
+                "try_silence_return": False,
+                "try_run_fixed_codeblock_return": True,
                 "called_try_get_tag": True
             }
         )
         self.cog.try_silence = AsyncMock()
         self.cog.try_get_tag = AsyncMock()
-        self.cog.try_run_fixed_codeblock = AsyncMock(return_value=False)
+        self.cog.try_run_fixed_codeblock = AsyncMock()
 
         for case in test_cases:
-            with self.subTest(try_silence_return=case["try_silence_return"], try_get_tag=case["called_try_get_tag"]):
+            with self.subTest(try_silence_return=case["try_silence_return"],
+                              try_run_fixed_codeblock_return=case["try_run_fixed_codeblock_return"],
+                              try_get_tag=case["called_try_get_tag"]):
                 self.ctx.reset_mock()
                 self.cog.try_silence.reset_mock(return_value=True)
+                self.cog.try_run_fixed_codeblock.reset_mock(return_value=True)
                 self.cog.try_get_tag.reset_mock()
                 self.ctx.invoked_from_error_handler = False
 
                 self.cog.try_silence.return_value = case["try_silence_return"]
+                self.cog.try_run_fixed_codeblock.return_value = case["try_run_fixed_codeblock_return"]
                 self.ctx.channel.id = 1234
 
                 self.assertIsNone(await self.cog.on_command_error(self.ctx, error))
@@ -67,9 +79,15 @@ class ErrorHandlerTests(unittest.IsolatedAsyncioTestCase):
                 if case["try_silence_return"]:
                     self.cog.try_get_tag.assert_not_awaited()
                     self.cog.try_silence.assert_awaited_once()
+                    self.cog.try_run_fixed_codeblock.assert_not_awaited()
+                elif case["try_run_fixed_codeblock_return"]:
+                    self.cog.try_get_tag.assert_not_awaited()
+                    self.cog.try_silence.assert_awaited_once()
+                    self.cog.try_run_fixed_codeblock.assert_awaited_once()
                 else:
                     self.cog.try_silence.assert_awaited_once()
                     self.cog.try_get_tag.assert_awaited_once()
+                    self.cog.try_run_fixed_codeblock.assert_awaited_once()
 
                 self.ctx.send.assert_not_awaited()
 
