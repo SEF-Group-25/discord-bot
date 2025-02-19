@@ -46,6 +46,9 @@ class HelpEmbedView(ViewWithUserAndRoleCheck):
         """Send an ephemeral message with the contents of the help command."""
         await interaction.response.send_message(embed=self.help_embed, ephemeral=True)
 
+def mark_branch(branch_id) -> None:
+    with open("branch_count.log", "a") as log_file:
+        log_file.write(f"branch {branch_id} executed\n")
 
 class ErrorHandler(Cog):
     """Handles errors emitted from commands."""
@@ -84,9 +87,12 @@ class ErrorHandler(Cog):
         5. ResponseCodeError: see `handle_api_error`
         6. Otherwise, if not a DisabledCommand, handling is deferred to `handle_unexpected_error`
         """
+        mark_branch(1)
+
         command = ctx.command
 
         if hasattr(e, "handled"):
+            mark_branch(2)
             log.trace(f"Command {command} had its error already handled locally; ignoring.")
             return
 
@@ -96,6 +102,8 @@ class ErrorHandler(Cog):
         )
 
         if isinstance(e, errors.CommandNotFound) and not getattr(ctx, "invoked_from_error_handler", False):
+            mark_branch(3)
+            mark_branch(4)
             # We might not invoke a command from the error handler, but it's easier and safer to ensure
             # this is always set rather than trying to get it exact, and shouldn't cause any issues.
             ctx.invoked_from_error_handler = True
@@ -104,45 +112,61 @@ class ErrorHandler(Cog):
             # We wrap non CommandErrors in CommandInvokeError to mirror the behaviour of normal commands.
             try:
                 if await self.try_silence(ctx):
+                    mark_branch(5)
                     return
                 if await self.try_run_fixed_codeblock(ctx):
+                    mark_branch(6)
                     return
                 await self.try_get_tag(ctx)
             except Exception as err:
+                mark_branch(7)
                 log.info("Re-handling error raised by command in error handler")
                 if isinstance(err, errors.CommandError):
+                    mark_branch(8)
                     await self.on_command_error(ctx, err)
                 else:
                     await self.on_command_error(ctx, errors.CommandInvokeError(err))
         elif isinstance(e, errors.UserInputError):
+            mark_branch(9)
             log.debug(debug_message)
             await self.handle_user_input_error(ctx, e)
         elif isinstance(e, errors.CheckFailure):
+            mark_branch(10)
             log.debug(debug_message)
             await self.handle_check_failure(ctx, e)
         elif isinstance(e, errors.CommandOnCooldown | errors.MaxConcurrencyReached):
+            mark_branch(11)
             log.debug(debug_message)
             await ctx.send(e)
         elif isinstance(e, errors.CommandInvokeError):
+            mark_branch(12)
             if isinstance(e.original, ResponseCodeError):
+                mark_branch(13)
                 await self.handle_api_error(ctx, e.original)
             elif isinstance(e.original, LockedResourceError):
+                mark_branch(14)
                 await ctx.send(f"{e.original} Please wait for it to finish and try again later.")
             elif isinstance(e.original, InvalidInfractedUserError):
+                mark_branch(15)
                 await ctx.send(f"Cannot infract that user. {e.original.reason}")
             elif isinstance(e.original, Forbidden):
+                mark_branch(16)
                 try:
                     await handle_forbidden_from_block(e.original, ctx.message)
                 except Forbidden:
+                    mark_branch(17)
                     await self.handle_unexpected_error(ctx, e.original)
             else:
                 await self.handle_unexpected_error(ctx, e.original)
         elif isinstance(e, errors.ConversionError):
+            mark_branch(18)
             if isinstance(e.original, ResponseCodeError):
+                mark_branch(19)
                 await self.handle_api_error(ctx, e.original)
             else:
                 await self.handle_unexpected_error(ctx, e.original)
         elif isinstance(e, errors.DisabledCommand):
+            mark_branch(20)
             log.debug(debug_message)
         else:
             # ExtensionError
