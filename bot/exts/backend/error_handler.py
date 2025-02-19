@@ -130,10 +130,13 @@ class ErrorHandler(Cog):
                 await ctx.send(f"{e.original} Please wait for it to finish and try again later.")
             elif isinstance(e.original, InvalidInfractedUserError):
                 await ctx.send(f"Cannot infract that user. {e.original.reason}")
-            elif isinstance(e.original, Forbidden): # TODO
+            elif isinstance(e.original, Forbidden):
+                # handle_forbidden_from_block() handles ``discord.Forbidden`` 90001 errors, 
+                # or re-raises if ``error`` isn't a 90001 error.
                 try:
                     await handle_forbidden_from_block(e.original, ctx.message)
                 except Forbidden:
+                    # re-handle the error if it isn't a 90001 error.
                     await self.handle_unexpected_error(ctx, e.original)
             else:
                 await self.handle_unexpected_error(ctx, e.original)

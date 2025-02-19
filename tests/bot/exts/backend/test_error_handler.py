@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import AsyncMock, MagicMock, Mock, call, patch
 
+from discord import Forbidden
 from discord.ext.commands import errors
 from pydis_core.site_api import ResponseCodeError
 
@@ -145,6 +146,12 @@ class ErrorHandlerTests(unittest.IsolatedAsyncioTestCase):
                     case["expect_mock_call"].assert_awaited_once_with(
                         self.ctx, case["args"][1].original
                     )
+
+    async def test_error_handler_command_invoke_error_forbidden(self):
+        self.cog.handle_unexpected_error = AsyncMock()
+        e = errors.CommandInvokeError(Forbidden(AsyncMock(), AsyncMock()))
+        self.assertIsNone(await self.cog.on_command_error(self.ctx, e))
+        self.cog.handle_unexpected_error.assert_awaited_once()
 
     async def test_error_handler_conversion_error(self):
         """Should call `handle_api_error` or `handle_unexpected_error` depending on original error."""
