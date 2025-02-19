@@ -24,6 +24,10 @@ from bot.utils.modlog import send_log_message
 
 log = get_logger(__name__)
 
+def mark_branch(branch_id):
+    with open("branch_count.log", "a") as log_file:
+        log_file.write(f"branch {branch_id} executed\n")
+
 
 class InfractionScheduler:
     """Handles the application, pardoning, and expiration of infractions."""
@@ -132,6 +136,7 @@ class InfractionScheduler:
         user_reason: str | None = None,
         additional_info: str = "",
     ) -> bool:
+        print("ASDJALSKDJAKLSDJLKASD\n\n\n\n\n\n\n\n\n\”ASDASDOIJASLDKJASLKDJKASJD")
         """
         Apply an infraction to the user, log the infraction, and optionally notify the user.
 
@@ -155,6 +160,7 @@ class InfractionScheduler:
         )
 
         if user_reason is None:
+            mark_branch(1)
             user_reason = reason
 
         log.trace(f"Applying {infr_type} infraction #{id_} to {user}.")
@@ -164,6 +170,7 @@ class InfractionScheduler:
 
         # Specifying an expiry for a note or warning makes no sense.
         if infr_type in ("note", "warning"):
+            mark_branch(2)
             expiry_msg = ""
         else:
             expiry_msg = f" until {expiry}" if expiry else " permanently"
@@ -181,7 +188,9 @@ class InfractionScheduler:
         # apply kick/ban infractions first, this would mean that we'd make it
         # impossible for us to deliver a DM. See python-discord/bot#982.
         if not infraction["hidden"] and infr_type in {"ban", "kick"}:
+            mark_branch(3)
             if await _utils.notify_infraction(infraction, user, user_reason):
+                mark_branch(4)
                 dm_result = ":incoming_envelope: "
                 dm_log_text = "\nDM: Sent"
             else:
@@ -190,6 +199,7 @@ class InfractionScheduler:
 
         end_msg = ""
         if is_mod_channel(ctx.channel):
+            mark_branch(5)
             log.trace(f"Fetching total infraction count for {user}.")
 
             infractions = await self.bot.api_client.get(
@@ -199,10 +209,12 @@ class InfractionScheduler:
             total = len(infractions)
             end_msg = f" (#{id_} ; {total} infraction{ngettext('', 's', total)} total)"
         elif infraction["actor"] == self.bot.user.id:
+            mark_branch(6)
             log.trace(
                 f"Infraction #{id_} actor is bot; including the reason in the confirmation message."
             )
             if reason:
+                mark_branch(7)
                 end_msg = (
                     f" (reason: {textwrap.shorten(reason, width=1500, placeholder='...')})."
                     f"\n\nThe <@&{Roles.moderators}> have been alerted for review"
@@ -212,13 +224,17 @@ class InfractionScheduler:
 
         # Execute the necessary actions to apply the infraction on Discord.
         if action:
+            mark_branch(8)
             log.trace(f"Running the infraction #{id_} application action.")
             try:
+                mark_branch(9)
                 await action()
                 if expiry:
+                    mark_branch(10)
                     # Schedule the expiration of the infraction.
                     self.schedule_expiration(infraction)
             except discord.HTTPException as e:
+                mark_branch(11)
                 # Accordingly display that applying the infraction failed.
                 # Don't use ctx.message.author; antispam only patches ctx.author.
                 confirm_msg = ":x: failed to apply"
@@ -228,8 +244,10 @@ class InfractionScheduler:
 
                 log_msg = f"Failed to apply {' '.join(infr_type.split('_'))} infraction #{id_} to {user}"
                 if isinstance(e, discord.Forbidden):
+                    mark_branch(12)
                     log.warning(f"{log_msg}: bot lacks permissions.")
                 elif e.code == 10007 or e.status == 404:
+                    mark_branch(13)
                     log.info(
                         f"Can't apply {infraction['type']} to user {infraction['user']} because user left from guild."
                     )
@@ -239,17 +257,21 @@ class InfractionScheduler:
 
 
         if not failed:
+            mark_branch(14)
             infr_message = f" **{purge}{' '.join(infr_type.split('_'))}** to {user.mention}{expiry_msg}{end_msg}"
 
             # If we need to DM and haven't already tried to
             if not infraction["hidden"] and infr_type not in {"ban", "kick"}:
+                mark_branch(15)
                 if await _utils.notify_infraction(infraction, user, user_reason):
+                    mark_branch(16)
                     dm_result = ":incoming_envelope: "
                     dm_log_text = "\nDM: Sent"
                 else:
                     dm_result = f"{constants.Emojis.failmail} "
                     dm_log_text = "\nDM: **Failed**"
                     if infr_type == "warning" and not ctx.channel.permissions_for(user).view_channel:
+                        mark_branch(17)
                         failed = True
                         log_title = "failed to apply"
                         additional_info += "\n*Failed to show the warning to the user*"
@@ -257,10 +279,13 @@ class InfractionScheduler:
                                        "because DMing the user was unsuccessful")
 
         if failed:
+            mark_branch(18)
             log.trace(f"Trying to delete infraction {id_} from database because applying infraction failed.")
             try:
+                mark_branch(19)
                 await self.bot.api_client.delete(f"bot/infractions/{id_}")
             except ResponseCodeError as e:
+                mark_branch(20)
                 confirm_msg += " and failed to delete"
                 log_title += " and failed to delete"
                 log.error(f"Deletion of {infr_type} infraction #{id_} failed with error code {e.status}.")
@@ -272,6 +297,7 @@ class InfractionScheduler:
         await ctx.send(f"{dm_result}{confirm_msg}{infr_message}.", allowed_mentions=mentions)
 
         if jump_url is None:
+            mark_branch(21)
             jump_url = "(Infraction issued in a ModMail channel.)"
         else:
             jump_url = f"[Click here.]({jump_url})"
