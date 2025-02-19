@@ -106,13 +106,13 @@ class ErrorHandler(Cog):
                 if await self.try_silence(ctx):
                     return
                 if await self.try_run_fixed_codeblock(ctx):
-                    return
+                    return  # if the command body is within triple backticks, then try to invoke it
                 await self.try_get_tag(ctx)
-            except Exception as err:
+            except Exception as err:    # error raised by those three functions in try block
                 log.info("Re-handling error raised by command in error handler")
-                if isinstance(err, errors.CommandError):
+                if isinstance(err, errors.CommandError):    # if the error is a CommandError, use on_command_error itself to handle it
                     await self.on_command_error(ctx, err)
-                else:
+                else:                                       # else it is a invoke error
                     await self.on_command_error(ctx, errors.CommandInvokeError(err))
         elif isinstance(e, errors.UserInputError):
             log.debug(debug_message)
@@ -130,7 +130,7 @@ class ErrorHandler(Cog):
                 await ctx.send(f"{e.original} Please wait for it to finish and try again later.")
             elif isinstance(e.original, InvalidInfractedUserError):
                 await ctx.send(f"Cannot infract that user. {e.original.reason}")
-            elif isinstance(e.original, Forbidden):
+            elif isinstance(e.original, Forbidden): # TODO
                 try:
                     await handle_forbidden_from_block(e.original, ctx.message)
                 except Forbidden:
