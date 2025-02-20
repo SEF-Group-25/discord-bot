@@ -196,11 +196,11 @@ def humanize_delta(
     """
     mark_branch(1)
     if args and kwargs:
-        mark_branch(2)
+        mark_branch(2) # Never hit, is hit if function is called with both args and kwargs.
         raise ValueError("Unsupported combination of positional and keyword arguments.")
 
     if len(args) == 0:
-        mark_branch(3)
+        mark_branch(3) # Never hit, is hit if function is called with no args, (only kwargs).
         delta = relativedelta(**kwargs)
     elif len(args) == 1 and isinstance(args[0], relativedelta):
         mark_branch(4)
@@ -215,7 +215,7 @@ def humanize_delta(
             mark_branch(6)
             delta = abs(delta)
     else:
-        mark_branch(7)
+        mark_branch(7) # Never hit, is hit if function is called with more than 2 args.
         raise ValueError(f"Received {len(args)} positional arguments, but expected 1 or 2.")
 
     if max_units <= 0:
@@ -253,7 +253,7 @@ def humanize_delta(
 
     # If nothing has been found, just make the value 0 precision, e.g. `0 days`.
     if not time_strings:
-        mark_branch(13)
+        mark_branch(13) # Never hit, is hit if called with time units of 0.
         humanized = _stringify_time_unit(0, precision)
     else:
         mark_branch(14)

@@ -9,6 +9,7 @@ from bot.utils import time
 class TimeTests(unittest.TestCase):
     """Test helper functions in bot.utils.time."""
 
+    # Tests robustness by specifying an invalid time unit.
     def test_humanize_delta_handle_unknown_units(self):
         """humanize_delta should be able to handle unknown units, and will not abort."""
         # Does not abort for unknown units, as the unit name is checked
