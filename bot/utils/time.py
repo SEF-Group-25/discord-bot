@@ -127,6 +127,11 @@ def humanize_delta(
     ...
 # endregion
 
+def mark_branch(branch_id: int) -> None:
+    """Manual tool to check coverage."""
+    with open("branch_count_new.log", "a") as log_file:
+        log_file.write(f"branch {branch_id} executed\n")
+
 
 def humanize_delta(
     *args,
@@ -189,24 +194,32 @@ def humanize_delta(
     Instead, it's relative to the `datetime` to which it's added to get the other `datetime`.
     In the example, the difference arises because all months don't have the same number of days.
     """
+    mark_branch(1)
     if args and kwargs:
+        mark_branch(2)
         raise ValueError("Unsupported combination of positional and keyword arguments.")
 
     if len(args) == 0:
+        mark_branch(3)
         delta = relativedelta(**kwargs)
     elif len(args) == 1 and isinstance(args[0], relativedelta):
+        mark_branch(4)
         delta = args[0]
     elif len(args) <= 2:
+        mark_branch(5)
         end = arrow.get(args[0])
         start = arrow.get(args[1]) if len(args) == 2 else arrow.utcnow()
         delta = round_delta(relativedelta(end.datetime, start.datetime))
 
         if absolute:
+            mark_branch(6)
             delta = abs(delta)
     else:
+        mark_branch(7)
         raise ValueError(f"Received {len(args)} positional arguments, but expected 1 or 2.")
 
     if max_units <= 0:
+        mark_branch(8)
         raise ValueError("max_units must be positive.")
 
     units = (
@@ -222,22 +235,28 @@ def humanize_delta(
     time_strings = []
     unit_count = 0
     for unit, value in units:
+        mark_branch(9)
         if value:
+            mark_branch(10)
             time_strings.append(_stringify_time_unit(value, unit))
             unit_count += 1
 
         if unit == precision or unit_count >= max_units:
+            mark_branch(11)
             break
 
     # Add the 'and' between the last two units, if necessary.
     if len(time_strings) > 1:
+        mark_branch(12)
         time_strings[-1] = f"{time_strings[-2]} and {time_strings[-1]}"
         del time_strings[-2]
 
     # If nothing has been found, just make the value 0 precision, e.g. `0 days`.
     if not time_strings:
+        mark_branch(13)
         humanized = _stringify_time_unit(0, precision)
     else:
+        mark_branch(14)
         humanized = ", ".join(time_strings)
 
     return humanized

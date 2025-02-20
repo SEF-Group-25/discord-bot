@@ -299,6 +299,8 @@ class InfractionScheduler:
         log.info(f"{'Failed to apply' if failed else 'Applied'} {purge}{infr_type} infraction #{id_} to {user}.")
         return not failed
 
+
+
     async def pardon_infraction(
         self,
         ctx: Context,
