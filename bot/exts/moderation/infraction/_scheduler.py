@@ -24,9 +24,14 @@ from bot.utils.modlog import send_log_message
 
 log = get_logger(__name__)
 
+def mark_branch(branch_id) -> None:
+    with open("branch_count.log", "a") as log_file:
+        log_file.write(f"branch {branch_id} executed\n")
+
 
 class InfractionScheduler:
     """Handles the application, pardoning, and expiration of infractions."""
+
 
     def __init__(self, bot: Bot, supported_infractions: t.Container[str]):
         self.bot = bot
@@ -392,6 +397,9 @@ class InfractionScheduler:
             content=log_content,
         )
 
+    
+
+        # Complexity: starts at 1
     async def deactivate_infraction(
         self,
         infraction: _utils.Infraction,
@@ -415,6 +423,7 @@ class InfractionScheduler:
 
         Infractions of unsupported types will raise a ValueError.
         """
+
         guild = self.bot.get_guild(constants.Guild.id)
         mod_role = guild.get_role(constants.Roles.moderators)
         user_id = infraction["user"]
@@ -436,24 +445,30 @@ class InfractionScheduler:
             log.trace("Awaiting the pardon action coroutine.")
             returned_log = await self._pardon_action(infraction, notify)
 
-            if returned_log is not None:
+            if returned_log is not None: # Complexity +1: 2
+                mark_branch(1)
                 log_text = {**log_text, **returned_log}  # Merge the logs together
             else:
+                mark_branch(2)
                 raise ValueError(
                     f"Attempted to deactivate an unsupported infraction #{id_} ({type_})!"
                 )
-        except discord.Forbidden:
+        except discord.Forbidden: #Complexity +1: 3
+            mark_branch(3)
             log.warning(f"Failed to deactivate infraction #{id_} ({type_}): bot lacks permissions.")
             log_text["Failure"] = "The bot lacks permissions to do this (role hierarchy?)"
             log_content = mod_role.mention
-        except discord.HTTPException as e:
-            if e.code == 10007 or e.status == 404:
+        except discord.HTTPException as e: #complexity +1: 4
+            mark_branch(4)
+            if e.code == 10007 or e.status == 404: #complexity +1: 5
+                mark_branch(5)
                 log.info(
                     f"Can't pardon {infraction['type']} for user {infraction['user']} because user left the guild."
                 )
                 log_text["Failure"] = "User left the guild."
                 log_content = mod_role.mention
             else:
+                mark_branch(6)
                 log.exception(f"Failed to deactivate infraction #{id_} ({type_})")
                 log_text["Failure"] = f"HTTPException with status {e.status} and code {e.code}."
                 log_content = mod_role.mention
@@ -471,8 +486,15 @@ class InfractionScheduler:
                 }
             )
 
-            log_text["Watching"] = "Yes" if active_watch else "No"
-        except ResponseCodeError:
+            #log_text["Watching"] = "Yes" if active_watch else "No" #complexity +1: 6
+            if active_watch:
+                mark_branch(7)
+                log_text["Watching"] = "Yes"
+            else:
+                mark_branch(8)
+                log_text["Watching"] = "No"
+        except ResponseCodeError: #complexity +1: 7
+            mark_branch(9)
             log.exception(f"Failed to fetch watch status for user {user_id}")
             log_text["Watching"] = "Unknown - failed to fetch watch status."
 
@@ -482,10 +504,12 @@ class InfractionScheduler:
 
             data = {"active": False}
 
-            if pardon_reason is not None:
+            if pardon_reason is not None:#complexity +1: 8
+                mark_branch(10)
                 data["reason"] = ""
                 # Append pardon reason to infraction in database.
-                if (punish_reason := infraction["reason"]) is not None:
+                if (punish_reason := infraction["reason"]) is not None:# complexity +1: 9
+                    mark_branch(11)
                     data["reason"] = punish_reason + " | "
 
                 data["reason"] += f"Pardoned: {pardon_reason}"
@@ -494,27 +518,44 @@ class InfractionScheduler:
                 f"bot/infractions/{id_}",
                 json=data
             )
-        except ResponseCodeError as e:
+        except ResponseCodeError as e:#complexity +1: 10
+            mark_branch(12)
             log.exception(f"Failed to deactivate infraction #{id_} ({type_})")
             log_line = f"API request failed with code {e.status}."
             log_content = mod_role.mention
 
             # Append to an existing failure message if possible
-            if "Failure" in log_text:
+            if "Failure" in log_text:#complexity +1: 11
+                mark_branch(13)
                 log_text["Failure"] += f" {log_line}"
             else:
+                mark_branch(14)
                 log_text["Failure"] = log_line
 
         # Cancel the expiration task.
-        if infraction["expires_at"] is not None:
+        if infraction["expires_at"] is not None:#complexity +1: 12
+            mark_branch(15)
             self.scheduler.cancel(infraction["id"])
 
         # Send a log message to the mod log.
-        if send_log:
-            log_title = "expiration failed" if "Failure" in log_text else "expired"
+        if send_log:#complexity +1: 13
+            mark_branch(16)
+            #log_title = "expiration failed" if "Failure" in log_text else "expired" #complexity +1: 14
+            if "Failure" in log_text:
+                mark_branch(17)
+                log_title = "expiration failed"
+            else:
+                mark_branch(18)
+                log_title = "expired"
 
             user = self.bot.get_user(user_id)
-            avatar = user.display_avatar.url if user else None
+            #avatar = user.display_avatar.url if user else None #complexity +1: 15
+            if user:
+                mark_branch(19)
+                avatar = user.display_avatar.url
+            else:
+                mark_branch(20)
+                avatar = None
 
             # Move reason to end so when reason is too long, this is not gonna cut out required items.
             log_text["Reason"] = log_text.pop("Reason")
@@ -526,7 +567,7 @@ class InfractionScheduler:
                 colour=Colours.soft_green,
                 title=f"Infraction {log_title}: {type_}",
                 thumbnail=avatar,
-                text="\n".join(f"{k}: {v}" for k, v in log_text.items()),
+                text="\n".join(f"{k}: {v}" for k, v in log_text.items()),#complexity +1: 16
                 footer=f"ID: {id_}",
                 content=log_content,
             )
