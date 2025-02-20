@@ -390,8 +390,110 @@ class InfractionScheduler:
             content=log_content,
         )
 
-    async def deactivate_infraction(
-        self,
+
+    
+    async def _handle_pardon(self, infraction, notify, id_, type_, mod_role, log_text):
+        try:
+            log.trace("Awaiting the pardon action coroutine.")
+            returned_log = await self._pardon_action(infraction, notify)
+
+            if returned_log is not None:
+                log_text = {**log_text, **returned_log}  # Merge the logs together
+            else:
+                raise ValueError(
+                    f"Attempted to deactivate an unsupported infraction #{id_} ({type_})!"
+                )
+        except discord.Forbidden:
+            log.warning(f"Failed to deactivate infraction #{id_} ({type_}): bot lacks permissions.")
+            log_text["Failure"] = "The bot lacks permissions to do this (role hierarchy?)"
+            log_content = mod_role.mention
+        except discord.HTTPException as e:
+            if e.code == 10007 or e.status == 404:
+                log.info(
+                    f"Can't pardon {infraction['type']} for user {infraction['user']} because user left the guild."
+                )
+                log_text["Failure"] = "User left the guild."
+                log_content = mod_role.mention
+            else:
+                log.exception(f"Failed to deactivate infraction #{id_} ({type_})")
+                log_text["Failure"] = f"HTTPException with status {e.status} and code {e.code}."
+                log_content = mod_role.mention
+        return log_text, log_content
+
+    async def _update_watch_status(self, user_id, log_text):
+        # Check if the user is currently being watched by Big Brother.
+        try:
+            log.trace(f"Determining if user {user_id} is currently being watched by Big Brother.")
+
+            active_watch = await self.bot.api_client.get(
+                "bot/infractions",
+                params={
+                    "active": "true",
+                    "type": "watch",
+                    "user__id": user_id
+                }
+            )
+
+            log_text["Watching"] = "Yes" if active_watch else "No"
+        except ResponseCodeError:
+            log.exception(f"Failed to fetch watch status for user {user_id}")
+            log_text["Watching"] = "Unknown - failed to fetch watch status."
+        return log_text
+    
+    async def _update_database(self, infraction, pardon_reason, id_, type_, log_text, log_content, mod_role):
+        try:
+            # Mark infraction as inactive in the database.
+            log.trace(f"Marking infraction #{id_} as inactive in the database.")
+
+            data = {"active": False}
+
+            if pardon_reason is not None:
+                data["reason"] = ""
+                # Append pardon reason to infraction in database.
+                if (punish_reason := infraction["reason"]) is not None:
+                    data["reason"] = punish_reason + " | "
+
+                data["reason"] += f"Pardoned: {pardon_reason}"
+
+            await self.bot.api_client.patch(
+                f"bot/infractions/{id_}",
+                json=data
+            )
+        except ResponseCodeError as e:
+            log.exception(f"Failed to deactivate infraction #{id_} ({type_})")
+            log_line = f"API request failed with code {e.status}."
+            log_content = mod_role.mention
+
+            # Append to an existing failure message if possible
+            if "Failure" in log_text:
+                log_text["Failure"] += f" {log_line}"
+            else:
+                log_text["Failure"] = log_line
+        return log_text, log_content
+        
+    async def _send_deactivation_log(self, id_, type_, user_id, log_text, log_content):
+
+            log_title = "expiration failed" if "Failure" in log_text else "expired"
+
+            user = self.bot.get_user(user_id)
+            avatar = user.display_avatar.url if user else None
+
+            # Move reason to end so when reason is too long, this is not gonna cut out required items.
+            log_text["Reason"] = log_text.pop("Reason")
+
+            log.trace(f"Sending deactivation mod log for infraction #{id_}.")
+            await send_log_message(
+                self.bot,
+                icon_url=_utils.INFRACTION_ICONS[type_][1],
+                colour=Colours.soft_green,
+                title=f"Infraction {log_title}: {type_}",
+                thumbnail=avatar,
+                text="\n".join(f"{k}: {v}" for k, v in log_text.items()),
+                footer=f"ID: {id_}",
+                content=log_content,
+            )
+            #CC starts as 1
+    async def deactivate_infraction(self,
         infraction: _utils.Infraction,
         pardon_reason: str | None = None,
         *,
@@ -430,104 +532,21 @@ class InfractionScheduler:
             "Created": time.format_with_duration(infraction["inserted_at"], infraction["expires_at"]),
         }
 
-        try:
-            log.trace("Awaiting the pardon action coroutine.")
-            returned_log = await self._pardon_action(infraction, notify)
+        log_text, log_content = await self._handle_pardon(
+            infraction, notify, id_, type_, mod_role, log_text
+        ) #+1 cc 2
+        log_text = await self._update_watch_status(user_id, log_text)# +1 cc 3
 
-            if returned_log is not None:
-                log_text = {**log_text, **returned_log}  # Merge the logs together
-            else:
-                raise ValueError(
-                    f"Attempted to deactivate an unsupported infraction #{id_} ({type_})!"
-                )
-        except discord.Forbidden:
-            log.warning(f"Failed to deactivate infraction #{id_} ({type_}): bot lacks permissions.")
-            log_text["Failure"] = "The bot lacks permissions to do this (role hierarchy?)"
-            log_content = mod_role.mention
-        except discord.HTTPException as e:
-            if e.code == 10007 or e.status == 404:
-                log.info(
-                    f"Can't pardon {infraction['type']} for user {infraction['user']} because user left the guild."
-                )
-                log_text["Failure"] = "User left the guild."
-                log_content = mod_role.mention
-            else:
-                log.exception(f"Failed to deactivate infraction #{id_} ({type_})")
-                log_text["Failure"] = f"HTTPException with status {e.status} and code {e.code}."
-                log_content = mod_role.mention
+        log_text, log_content = await self._update_database(
+            infraction, pardon_reason, id_, type_, log_text, log_content, mod_role
+        ) #+1 cc 4
+        if infraction["expires_at"] is not None: #+1 cc 5
+            self.scheduler.cancel(infraction["id"]) #+1 cc 6
 
-        # Check if the user is currently being watched by Big Brother.
-        try:
-            log.trace(f"Determining if user {user_id} is currently being watched by Big Brother.")
-
-            active_watch = await self.bot.api_client.get(
-                "bot/infractions",
-                params={
-                    "active": "true",
-                    "type": "watch",
-                    "user__id": user_id
-                }
-            )
-
-            log_text["Watching"] = "Yes" if active_watch else "No"
-        except ResponseCodeError:
-            log.exception(f"Failed to fetch watch status for user {user_id}")
-            log_text["Watching"] = "Unknown - failed to fetch watch status."
-
-        try:
-            # Mark infraction as inactive in the database.
-            log.trace(f"Marking infraction #{id_} as inactive in the database.")
-
-            data = {"active": False}
-
-            if pardon_reason is not None:
-                data["reason"] = ""
-                # Append pardon reason to infraction in database.
-                if (punish_reason := infraction["reason"]) is not None:
-                    data["reason"] = punish_reason + " | "
-
-                data["reason"] += f"Pardoned: {pardon_reason}"
-
-            await self.bot.api_client.patch(
-                f"bot/infractions/{id_}",
-                json=data
-            )
-        except ResponseCodeError as e:
-            log.exception(f"Failed to deactivate infraction #{id_} ({type_})")
-            log_line = f"API request failed with code {e.status}."
-            log_content = mod_role.mention
-
-            # Append to an existing failure message if possible
-            if "Failure" in log_text:
-                log_text["Failure"] += f" {log_line}"
-            else:
-                log_text["Failure"] = log_line
-
-        # Cancel the expiration task.
-        if infraction["expires_at"] is not None:
-            self.scheduler.cancel(infraction["id"])
-
-        # Send a log message to the mod log.
-        if send_log:
-            log_title = "expiration failed" if "Failure" in log_text else "expired"
-
-            user = self.bot.get_user(user_id)
-            avatar = user.display_avatar.url if user else None
-
-            # Move reason to end so when reason is too long, this is not gonna cut out required items.
-            log_text["Reason"] = log_text.pop("Reason")
-
-            log.trace(f"Sending deactivation mod log for infraction #{id_}.")
-            await send_log_message(
-                self.bot,
-                icon_url=_utils.INFRACTION_ICONS[type_][1],
-                colour=Colours.soft_green,
-                title=f"Infraction {log_title}: {type_}",
-                thumbnail=avatar,
-                text="\n".join(f"{k}: {v}" for k, v in log_text.items()),
-                footer=f"ID: {id_}",
-                content=log_content,
-            )
+        if send_log:    #+1 cc 7
+            await self._send_deactivation_log(
+                id_, type_, user_id, log_text, log_content
+            )   #+1 cc 8
 
         return log_text
 
