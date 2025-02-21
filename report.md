@@ -150,6 +150,16 @@ git diff 057ccfea 60905d84
 
 **Carried out refactoring (optional, P+):**
 
+### humanize_delta() (Oscar Hellgren)
+
+- I decided to split out the start of the functions that parses the arguments into another function. 
+- That would remove a lot of "ifs" and probably reduce CC by about half.
+- Biggest drawback might be that the code becomes a little less readable at a glance.
+
+The CC of humanize_delta is reduced from 16 to 7, a reduction of **over 35%**.
+
+The refactoring can easily be seen here https://github.com/SEF-Group-25/discord-bot/commit/090b45fbe102a725158401132762d7a6c95fbba2#diff-b59b30de0bdd9ce550116bf33a7e687e2798ecd117073d569bc673e6473c44b1
+
 ## Coverage
 
 ### Tools
@@ -304,6 +314,39 @@ There are 4 testcases added in [feat/14-test-deac-inf](https://github.com/SEF-Gr
 git diff 9b2c5620 60905d84
 ```
 
+## Coverage improvement (Oscar Hellgren)
+Below are some requirement comments for uncovered code paths in `humanize_delta()` that I identified:
+
+```python
+# Never hit, is hit if function is called with both args and kwargs.
+# Never hit, is hit if function is called with more than 2 args.
+# Never hit, is hit if function is called with no args, (only kwargs).
+# Never hit, is hit if called with time units of 0.
+```
+
+Report of old coverage:
+```shell
+# Name
+bot/utils/time.py                                                             
+Stmts   Miss Branch BrPart  Cover
+115     14     48     14    83%
+# Missing
+14, 69, 73, 97, 110, 127, 193, 204->209, 207, 224->233, 239, 310, 331, 346, 348->351, 352, 364
+```
+
+Report of new coverage:
+```shell
+# Name
+bot/utils/time.py                                                             
+Stmts   Miss Branch BrPart  Cover
+132     10     48     10    89%
+# Missing
+14, 73, 97, 110, 127, 214->221, 237->249, 329, 350, 365, 367->370, 371, 383
+```
+
+There are 4 new test cases that can be seen here https://github.com/SEF-Group-25/discord-bot/commit/67b261d7ad27c2b06e729eefe6270c2dd939528a#diff-87d5f76efce62e643b081faa44d5e3749266d4289e7056dbaa0807b4dd5c0897.
+These tests made every path in humanize_delta covered.
+
 ## Self-assessment: Way of working
 
 The current state is In Place according to the Essence standard. We can proficiently use git commit messages, GitHub issues to manage our code. We use different branches according to the issues to development. These practises and tools are being used by the whole team, although the requirements of different assignments vary greatly. And we get adapted to this way-of-working and benefit from it.
@@ -320,11 +363,14 @@ My main take-away is that metrics like cyclomatic complexity and coverage can pi
 ## Overal experience (Anton Yderberg)
 My main take away from this has been the experience of interacting with and onboarding onto a well documented open source program can be very impresive (And sometimes a pain in the ass). Its interesting to see how problematic code, even when it at face value seems very proffesional, can be and the use of tools that detect cyclomatic complexity and coverage are very usefull to detect potential problem code.
 
+## Overal experience (Oscar Hellgren)
+My main lesson is to make sure to write good starting documentation, i.e README, because it's quite frustrating when things don't work at all.
+
 ## Contributions
 
 | Group member     | Function name          | Function Location                                     |
 | ---------------- | ---------------------- | ----------------------------------------------------- |
-| Oscar Hellgren   |                        |                                                       |
+| Oscar Hellgren   | humanize_delta()       | bot/utils/time.py                                     |
 | Anton Yderberg   | deactivate_infraction()| 393-532@bot/exts/moderation/infraction/_schedueler.py |
 | Zubair Yousafzai | actions_for()          | 64-118@bot/exts/filtering/_filter_lists/extension.py  |
 | Shangxuan Tang   | on_command_error()     | 65-149@./bot/exts/backend/error_handler.py            |
