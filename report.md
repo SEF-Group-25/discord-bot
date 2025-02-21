@@ -364,7 +364,7 @@ My main take-away is that metrics like cyclomatic complexity and coverage can pi
 My main take away from this has been the experience of interacting with and onboarding onto a well documented open source program can be very impresive (And sometimes a pain in the ass). Its interesting to see how problematic code, even when it at face value seems very proffesional, can be and the use of tools that detect cyclomatic complexity and coverage are very usefull to detect potential problem code.
 
 ## Overal experience (Oscar Hellgren)
-My main lesson is to make sure to write good starting documentation, i.e README, because it's quite frustrating when things don't work at all.
+My main lesson is to make sure to write good starting documentation, i.e README, because it's quite frustrating when things don't work at all. I also found the tools to check CC to be quite useful.
 
 ## Contributions
 
