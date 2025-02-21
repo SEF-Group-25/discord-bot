@@ -65,54 +65,66 @@ class ExtensionsList(FilterList[ExtensionFilter]):
         self, ctx: FilterContext
     ) -> tuple[ActionSettings | None, list[str], dict[ListType, list[Filter]]]:
         """Dispatch the given event to the list's filters, and return actions to take and messages to relay to mods."""
-        # Return early if the message doesn't have attachments.
         if not ctx.message or not ctx.attachments:
             return None, [], {}
 
         _, failed = self[ListType.ALLOW].defaults.validations.evaluate(ctx)
-        if failed:  # There's no extension filtering in this context.
+        if failed:
             return None, [], {}
 
-        # Find all extensions in the message.
-        all_ext = {
-            (splitext(attachment.filename.lower())[1], attachment.filename) for attachment in ctx.attachments
-        }
-        new_ctx = ctx.replace(content={ext for ext, _ in all_ext})  # And prepare the context for the filters to read.
-        triggered = [
-            filter_ for filter_ in self[ListType.ALLOW].filters.values() if await filter_.triggered_on(new_ctx)
-        ]
-        allowed_ext = {filter_.content for filter_ in triggered}  # Get the extensions in the message that are allowed.
+        all_ext = self._get_all_extensions(ctx)
+        triggered, allowed_ext = await self._get_triggered_filters_and_allowed_ext(ctx, all_ext)
+        not_allowed = self._compute_not_allowed_extensions(ctx, all_ext, allowed_ext)
 
-        # See if there are any extensions left which aren't allowed.
-        not_allowed = {ext: filename for ext, filename in all_ext if ext not in allowed_ext}
-
-        if ctx.event == Event.SNEKBOX:
-            not_allowed = {ext: filename for ext, filename in not_allowed.items() if ext not in TXT_LIKE_FILES}
-
-        if not not_allowed:  # Yes, it's a double negative. Meaning all attachments are allowed :)
+        if not not_allowed:
             return None, [], {ListType.ALLOW: triggered}
 
-        # At this point, something is disallowed.
-        if ctx.event != Event.SNEKBOX:  # Don't post the embed if it's a snekbox response.
-            if ".py" in not_allowed:
-                # Provide a pastebin link for .py files.
-                ctx.dm_embed = PY_EMBED_DESCRIPTION
-            elif txt_extensions := {ext for ext in TXT_LIKE_FILES if ext in not_allowed}:
-                # Work around Discord auto-conversion of messages longer than 2000 chars to .txt
-                ctx.dm_embed = TXT_EMBED_DESCRIPTION.format(blocked_extension=txt_extensions.pop())
-            else:
-                meta_channel = bot.instance.get_channel(Channels.meta)
-                if not self._whitelisted_description:
-                    self._whitelisted_description = ", ".join(
-                        filter_.content for filter_ in self[ListType.ALLOW].filters.values()
-                    )
-                ctx.dm_embed = DISALLOWED_EMBED_DESCRIPTION.format(
-                    joined_whitelist=self._whitelisted_description,
-                    joined_blacklist=", ".join(not_allowed),
-                    meta_channel_mention=meta_channel.mention,
-                )
+        if ctx.event != Event.SNEKBOX:
+            self._set_dm_embed(ctx, not_allowed)
 
         ctx.matches += not_allowed.values()
         ctx.blocked_exts |= set(not_allowed)
         actions = self[ListType.ALLOW].defaults.actions if ctx.event != Event.SNEKBOX else None
         return actions, [f"`{ext}`" if ext else "`No Extension`" for ext in not_allowed], {ListType.ALLOW: triggered}
+
+    def _get_all_extensions(self, ctx: FilterContext) -> set[tuple[str, str]]:
+        """Extract file extensions from the attachments."""
+        return {(splitext(attachment.filename.lower())[1], attachment.filename) for attachment in ctx.attachments}
+
+    async def _get_triggered_filters_and_allowed_ext(
+        self, ctx: FilterContext, all_ext: set[tuple[str, str]]
+    ) -> tuple[list[Filter], set[str]]:
+        """Return the list of triggered filters and the allowed extensions."""
+        new_ctx = ctx.replace(content={ext for ext, _ in all_ext})
+        triggered = [
+            filter_ for filter_ in self[ListType.ALLOW].filters.values() if await filter_.triggered_on(new_ctx)
+        ]
+        allowed_ext = {filter_.content for filter_ in triggered}
+        return triggered, allowed_ext
+
+    def _compute_not_allowed_extensions(
+        self, ctx: FilterContext, all_ext: set[tuple[str, str]], allowed_ext: set[str]
+    ) -> dict[str, str]:
+        """Compute extensions in the message that are not allowed."""
+        not_allowed = {ext: filename for ext, filename in all_ext if ext not in allowed_ext}
+        if ctx.event == Event.SNEKBOX:
+            not_allowed = {ext: filename for ext, filename in not_allowed.items() if ext not in TXT_LIKE_FILES}
+        return not_allowed
+
+    def _set_dm_embed(self, ctx: FilterContext, not_allowed: dict[str, str]) -> None:
+        """Set the DM embed on the context based on which extensions were disallowed."""
+        if ".py" in not_allowed:
+            ctx.dm_embed = PY_EMBED_DESCRIPTION
+        elif txt_extensions := {ext for ext in TXT_LIKE_FILES if ext in not_allowed}:
+            ctx.dm_embed = TXT_EMBED_DESCRIPTION.format(blocked_extension=txt_extensions.pop())
+        else:
+            meta_channel = bot.instance.get_channel(Channels.meta)
+            if not self._whitelisted_description:
+                self._whitelisted_description = ", ".join(
+                    filter_.content for filter_ in self[ListType.ALLOW].filters.values()
+                )
+            ctx.dm_embed = DISALLOWED_EMBED_DESCRIPTION.format(
+                joined_whitelist=self._whitelisted_description,
+                joined_blacklist=", ".join(not_allowed),
+                meta_channel_mention=meta_channel.mention,
+            )
