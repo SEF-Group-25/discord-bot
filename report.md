@@ -1,5 +1,7 @@
 # Report for assignment 3
 
+This project is an experiment in complexity and coverage metrics, based on [Discord bot](https://github.com/python-discord/bot). The goals are to get an understanding and appreciation of the benefits and drawbacks of metrics and their tools, and to create new test cases or to enhance existing tests that improve statement or branch coverage.
+
 ## Onboarding experience (Shangxuan Tang)
 1. I don't have to install many additional tools to build the software except Poetry.
 2. Poetry is a widely-used Python packaging and dependency management tool, well documented on the official website.
@@ -53,6 +55,16 @@ Function: `actions_for64-118@bot/exts/filtering/_filter_lists/extension.py`
 4. Exceptions are taken into account, partly by Lizard but also by us when counting manually.
 5. The documentation is clear about the general filtering process, but some branches (like special handling for `.py` or text-like files in Snekbox mode) can be inferred only by reading the code.
 
+## deactivate_infraction() (Anton Yderberg)
+
+Function: `deactivate_infraction() .bot/exts/moderation/infraction/_schedueler.py`
+
+1. CC is 17. Got one partner to colaborate and Lizard gives the same result.
+2. NLOC is 114 so it is also long
+3. To remove an "infraction" a mark on their "record" on the discord server, and to notify all parts relevant depending on logs set. 
+The main reason for its length and complexity is that it interacts with a database and needs
+4. Yes +1 for every except block
+5. Yes
 
 ### humanize_delta() (Oscar Hellgren) 
 
@@ -96,6 +108,45 @@ The refactored code is in branch [refactor/12-on-command-error](https://github.c
 - For `actions_for`, we can separate out logic related to `.py` extensions, text-like files, and Snekbox into smaller helper functions.  
 - This would reduce nested `if` statements and improve readability, likely lowering the cyclomatic complexity from 25 closer to (estimated) 15–18.  
 - Potential drawbacks include needing more function calls and possibly introducing multiple return points.
+
+CC before:
+```shell
+# NLOC    CCN   token  PARAM  length  location  
+------------------------------------------------
+       4      1     35      2       4 __init__@50-53@bot/exts/filtering/_filter_lists/extension.py
+       3      1     17      2       3 get_filter_type@55-57@bot/exts/filtering/_filter_lists/extension.py
+       3      1     18      1       3 filter_types@60-62@bot/exts/filtering/_filter_lists/extension.py
+      42     25    422      2      55 actions_for@64-118@bot/exts/filtering/_filter_lists/extension.py
+```
+
+CC after:
+```shell
+# NLOC    CCN   token  PARAM  length  location  
+------------------------------------------------
+       4      1     35      2       4 __init__@50-53@bot/exts/filtering/_filter_lists/extension.py
+       3      1     17      2       3 get_filter_type@55-57@bot/exts/filtering/_filter_lists/extension.py
+       3      1     18      1       3 filter_types@60-62@bot/exts/filtering/_filter_lists/extension.py
+      20      9    210      2      25 actions_for@64-88@bot/exts/filtering/_filter_lists/extension.py
+       3      2     48      2       3 _get_all_extensions@90-92@bot/exts/filtering/_filter_lists/extension.py
+      10      5     96      3      10 _get_triggered_filters_and_allowed_ext@94-103@bot/exts/filtering/_filter_lists/extension.py
+       8      6     87      4       8 _compute_not_allowed_extensions@105-112@bot/exts/filtering/_filter_lists/extension.py
+      17      7    139      3      17 _set_dm_embed@114-130@bot/exts/filtering/_filter_lists/extension.py
+```
+
+The CC of actions_for is reduced from 25 to 9, a reduction of **64%**.
+
+The refactored code is in branch [refactor/18-refactor-actions-for](https://github.com/SEF-Group-25/discord-bot/tree/refactor/18-refactor-actions-for). Check the change using:
+```shell
+% git diff 60905d8 c0054be
+```
+## deactivate_infraction() (Anton Yderberg)
+Refactoring the code should be very easy, the function is grouped into 4 major tasks. The majority of the complexity comes from the try/except blocks with multiple excepts and if statements in except block. Spliting these tasks and try/except blocks will drastically reduce CC.
+
+The final CC would be 8 (more than 35% less than the original 17)
+The refactored code is in branch [refactor/15-deac-inf](https://github.com/SEF-Group-25/discord-bot/tree/origin/refactor/15-refactor-deac-inf)
+This will call alot more helper function as the obvious drawback
+
+git diff 057ccfea 60905d84
 
 **Carried out refactoring (optional, P+):**
 
@@ -171,6 +222,7 @@ bot/exts/backend/error_handler.py     245     58     96      5    77%
 There are 4 new test cases in branch [test/2-new-tests-error-handler](https://github.com/SEF-Group-25/discord-bot/tree/test/2-new-tests-error-handler). Check the test cases using:
 ```shell
 % git diff 60905d8 f4ba935
+```
 
 ## Coverage improvement (Zubair Yousafzai)
 Below are some requirement comments for uncovered code paths in `actions_for()` that I identified:
@@ -213,6 +265,45 @@ There are 4 new test cases in branch [feat/6-testing](https://github.com/SEF-Gro
 % git diff 60905d8 8f0c188
 ```
 
+## Coverage improvement (Anton Yderberg)
+
+
+Requierments:
+1. Call _pardon_action
+2. Raise ValueError if _pardon_action returns None
+3. Handle discord.Forbidden exceptions
+4. Handle discord.HTTPException for 404 or code 10007
+5. Record a “Failure” in the log for other HTTP exceptions
+6. Check watch status of the user
+7. Mark the infraction as inactive in the database
+8. Append the pardon reason if provided
+9. Cancel the scheduled expiration task
+10. Send a mod log entry if send_log is True
+11. Return a log dictionary summarizing the outcome
+
+
+Report of old coverage: Branch [feat/13-cov-deac-inf](https://github.com/SEF-Group-25/discord-bot/tree/origin/feat/13-cov-deac-inf)
+```shell
+# Name                              Stmts   Miss Branch BrPart  Cover
+bot/exts/backend/error_handler.py     248    209     68      0    12%
+# Missing (relevant)
+416-532, 546, 555-556 
+```
+
+Report of new coverage: Branch [feat/14-test-deac-inf](https://github.com/SEF-Group-25/discord-bot/tree/origin/feat/14-test-deac-inf)
+```shell
+# Name                              Stmts   Miss Branch BrPart  Cover
+bot/exts/backend/error_handler.py     277    184     74      6    29%
+# Missing (relevant)
+469-472, 489-490, 494-497, 505->515, 509->513, 519-531, 534->539, 540-562, 587, 596-597
+```
+
+There are 4 testcases added in [feat/14-test-deac-inf](https://github.com/SEF-Group-25/discord-bot/tree/origin/feat/14-test-deac-inf)
+
+```shell
+git diff 9b2c5620 60905d84
+```
+
 ## Self-assessment: Way of working
 
 The current state is In Place according to the Essence standard. We can proficiently use git commit messages, GitHub issues to manage our code. We use different branches according to the issues to development. These practises and tools are being used by the whole team, although the requirements of different assignments vary greatly. And we get adapted to this way-of-working and benefit from it.
@@ -226,11 +317,14 @@ I learned a lot of skills and knowledge of testing, and I become more sensitive 
 ## Overall experience (Zubair Yousafzai)
 My main take-away is that metrics like cyclomatic complexity and coverage can pinpoint areas needing attention, whether that’s refactoring overly complex functions or adding tests for under-tested code branches. Also I've learned that when a function is long it usually is overlooked in testing. So maybe the best way to code is to keep functions as small as possible to improve general reliability.
 
+## Overal experience (Anton Yderberg)
+My main take away from this has been the experience of interacting with and onboarding onto a well documented open source program can be very impresive (And sometimes a pain in the ass). Its interesting to see how problematic code, even when it at face value seems very proffesional, can be and the use of tools that detect cyclomatic complexity and coverage are very usefull to detect potential problem code.
+
 ## Contributions
 
-| Group member     | Function name      | Function Location                          |
-| ---------------- | ------------------ | ------------------------------------------ |
-| Oscar Hellgren   |                    |                                            |
-| Anton Yderberg   |                    |                                            |
-| Zubair Yousafzai | actions_for()      | 64-118@bot/exts/filtering/_filter_lists/extension.py|
-| Shangxuan Tang   | on_command_error() | 65-149@./bot/exts/backend/error_handler.py |
+| Group member     | Function name          | Function Location                                     |
+| ---------------- | ---------------------- | ----------------------------------------------------- |
+| Oscar Hellgren   |                        |                                                       |
+| Anton Yderberg   | deactivate_infraction()| 393-532@bot/exts/moderation/infraction/_schedueler.py |
+| Zubair Yousafzai | actions_for()          | 64-118@bot/exts/filtering/_filter_lists/extension.py  |
+| Shangxuan Tang   | on_command_error()     | 65-149@./bot/exts/backend/error_handler.py            |
