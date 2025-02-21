@@ -266,6 +266,9 @@ I learned a lot of skills and knowledge of testing, and I become more sensitive 
 ## Overall experience (Zubair Yousafzai)
 My main take-away is that metrics like cyclomatic complexity and coverage can pinpoint areas needing attention, whether that’s refactoring overly complex functions or adding tests for under-tested code branches. Also I've learned that when a function is long it usually is overlooked in testing. So maybe the best way to code is to keep functions as small as possible to improve general reliability.
 
+## Overal experience (Anton Yderberg)
+My main take away from this has been the experience of interacting with and onboarding onto a well documented open source program can be very impresive (And sometimes a pain in the ass). Its interesting to see how problematic code, even when it at face value seems very proffesional, can be and the use of tools that detect cyclomatic complexity and coverage are very usefull to detect potential problem code.
+
 ## Contributions
 
 | Group member     | Function name          | Function Location                                     |
