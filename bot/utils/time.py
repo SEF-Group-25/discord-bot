@@ -5,7 +5,7 @@ import re
 from copy import copy
 from enum import Enum
 from time import struct_time
-from typing import Literal, TYPE_CHECKING, overload
+from typing import Any, Literal, TYPE_CHECKING, overload
 
 import arrow
 from dateutil.relativedelta import relativedelta
@@ -26,14 +26,14 @@ _DURATION_REGEX = re.compile(
 # All supported types for the single-argument overload of arrow.get(). tzinfo is excluded because
 # it's too implicit of a way for the caller to specify that they want the current time.
 Timestamp = (
-    arrow.Arrow
-    | datetime.datetime
-    | datetime.date
-    | struct_time
-    | int  # POSIX timestamp
-    | float  # POSIX timestamp
-    | str  # ISO 8601-formatted string
-    | tuple[int, int, int]  # ISO calendar tuple
+        arrow.Arrow
+        | datetime.datetime
+        | datetime.date
+        | struct_time
+        | int  # POSIX timestamp
+        | float  # POSIX timestamp
+        | str  # ISO 8601-formatted string
+        | tuple[int, int, int]  # ISO calendar tuple
 )
 _Precision = Literal["years", "months", "days", "hours", "minutes", "seconds"]
 
@@ -87,53 +87,96 @@ def discord_timestamp(timestamp: Timestamp, format: TimestampFormats = Timestamp
 # region humanize_delta overloads
 @overload
 def humanize_delta(
-    arg1: relativedelta | Timestamp,
-    /,
-    *,
-    precision: _Precision = "seconds",
-    max_units: int = 6,
-    absolute: bool = True,
+        arg1: relativedelta | Timestamp,
+        /,
+        *,
+        precision: _Precision = "seconds",
+        max_units: int = 6,
+        absolute: bool = True,
 ) -> str:
     ...
 
 
 @overload
 def humanize_delta(
-    end: Timestamp,
-    start: Timestamp,
-    /,
-    *,
-    precision: _Precision = "seconds",
-    max_units: int = 6,
-    absolute: bool = True,
+        end: Timestamp,
+        start: Timestamp,
+        /,
+        *,
+        precision: _Precision = "seconds",
+        max_units: int = 6,
+        absolute: bool = True,
 ) -> str:
     ...
 
 
 @overload
 def humanize_delta(
-    *,
-    years: int = 0,
-    months: int = 0,
-    weeks: float = 0,
-    days: float = 0,
-    hours: float = 0,
-    minutes: float = 0,
-    seconds: float = 0,
-    precision: _Precision = "seconds",
-    max_units: int = 6,
-    absolute: bool = True,
+        *,
+        years: int = 0,
+        months: int = 0,
+        weeks: float = 0,
+        days: float = 0,
+        hours: float = 0,
+        minutes: float = 0,
+        seconds: float = 0,
+        precision: _Precision = "seconds",
+        max_units: int = 6,
+        absolute: bool = True,
 ) -> str:
     ...
+
+
 # endregion
 
+def mark_branch(branch_id: int) -> None:
+    """Manual tool to check coverage."""
+    with open("branch_count_new.log", "a") as log_file:
+        log_file.write(f"branch {branch_id} executed\n")
+
+
+def parse_arguments(args: Any,
+                    kwargs: Any,
+                    max_units: int,
+                    absolute: bool) -> tuple:
+    """Parses the arguments and returns a tuple."""
+    if args and kwargs:
+        raise ValueError("Unsupported combination of positional and keyword arguments.")
+
+    if len(args) == 0:
+        delta = relativedelta(**kwargs)
+    elif len(args) == 1 and isinstance(args[0], relativedelta):
+        delta = args[0]
+    elif len(args) <= 2:
+        end = arrow.get(args[0])
+        start = arrow.get(args[1]) if len(args) == 2 else arrow.utcnow()
+        delta = round_delta(relativedelta(end.datetime, start.datetime))
+
+        if absolute:
+            delta = abs(delta)
+    else:
+        raise ValueError(f"Received {len(args)} positional arguments, but expected 1 or 2.")
+
+    if max_units <= 0:
+        raise ValueError("max_units must be positive.")
+
+    units = (
+        ("years", delta.years),
+        ("months", delta.months),
+        ("days", delta.days),
+        ("hours", delta.hours),
+        ("minutes", delta.minutes),
+        ("seconds", delta.seconds),
+    )
+    return units
+
 
 def humanize_delta(
-    *args,
-    precision: _Precision = "seconds",
-    max_units: int = 6,
-    absolute: bool = True,
-    **kwargs,
+        *args,
+        precision: _Precision = "seconds",
+        max_units: int = 6,
+        absolute: bool = True,
+        **kwargs,
 ) -> str:
     """
     Return a human-readable version of a time duration.
@@ -189,55 +232,35 @@ def humanize_delta(
     Instead, it's relative to the `datetime` to which it's added to get the other `datetime`.
     In the example, the difference arises because all months don't have the same number of days.
     """
-    if args and kwargs:
-        raise ValueError("Unsupported combination of positional and keyword arguments.")
-
-    if len(args) == 0:
-        delta = relativedelta(**kwargs)
-    elif len(args) == 1 and isinstance(args[0], relativedelta):
-        delta = args[0]
-    elif len(args) <= 2:
-        end = arrow.get(args[0])
-        start = arrow.get(args[1]) if len(args) == 2 else arrow.utcnow()
-        delta = round_delta(relativedelta(end.datetime, start.datetime))
-
-        if absolute:
-            delta = abs(delta)
-    else:
-        raise ValueError(f"Received {len(args)} positional arguments, but expected 1 or 2.")
-
-    if max_units <= 0:
-        raise ValueError("max_units must be positive.")
-
-    units = (
-        ("years", delta.years),
-        ("months", delta.months),
-        ("days", delta.days),
-        ("hours", delta.hours),
-        ("minutes", delta.minutes),
-        ("seconds", delta.seconds),
-    )
+    mark_branch(1)
+    units = parse_arguments(args, kwargs, max_units, absolute)
 
     # Add the time units that are >0, but stop at precision or max_units.
     time_strings = []
     unit_count = 0
     for unit, value in units:
+        mark_branch(2)
         if value:
+            mark_branch(3)
             time_strings.append(_stringify_time_unit(value, unit))
             unit_count += 1
 
         if unit == precision or unit_count >= max_units:
+            mark_branch(4)
             break
 
     # Add the 'and' between the last two units, if necessary.
     if len(time_strings) > 1:
+        mark_branch(5)
         time_strings[-1] = f"{time_strings[-2]} and {time_strings[-1]}"
         del time_strings[-2]
 
     # If nothing has been found, just make the value 0 precision, e.g. `0 days`.
     if not time_strings:
+        mark_branch(6)  # Never hit, is hit if called with time units of 0.
         humanized = _stringify_time_unit(0, precision)
     else:
+        mark_branch(7)
         humanized = ", ".join(time_strings)
 
     return humanized
@@ -289,9 +312,9 @@ def format_relative(timestamp: Timestamp) -> str:
 
 
 def format_with_duration(
-    timestamp: Timestamp | None,
-    other_timestamp: Timestamp | None = None,
-    max_units: int = 2,
+        timestamp: Timestamp | None,
+        other_timestamp: Timestamp | None = None,
+        max_units: int = 2,
 ) -> str | None:
     """
     Return `timestamp` formatted as a discord timestamp with the timestamp duration since `other_timestamp`.

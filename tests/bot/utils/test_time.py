@@ -9,6 +9,28 @@ from bot.utils import time
 class TimeTests(unittest.TestCase):
     """Test helper functions in bot.utils.time."""
 
+    def test_both_arg_and_kwarg(self):
+        """Should raise ValueError if passed both args and kwargs"""
+        with self.assertRaises(ValueError):
+            time.humanize_delta("2021-08-06T12:43:01Z", days=2, hours=5)
+
+    def test_call_without_args(self):
+        """A call without args, only kwargs"""
+        actual = time.humanize_delta(days=2, hours=2)
+        self.assertEqual(actual, "2 days and 2 hours")
+
+    def test_over_2_args(self):
+        """Should raise ValueError if passed more than two args"""
+        with self.assertRaises(ValueError):
+            time.humanize_delta("2021-08-06T12:43:01Z", "2022-08-06T12:43:01Z", "2023-08-06T12:43:01Z")
+
+    def test_time_units_of_all_0(self):
+        """Should return "0 seconds" of passed arguments of no time"""
+        actual = time.humanize_delta(seconds=0, minutes=0, hours=0, days=0)
+        self.assertEqual(actual, "0 seconds")
+
+
+    # Tests robustness by specifying an invalid time unit.
     def test_humanize_delta_handle_unknown_units(self):
         """humanize_delta should be able to handle unknown units, and will not abort."""
         # Does not abort for unknown units, as the unit name is checked
