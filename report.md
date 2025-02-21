@@ -20,6 +20,17 @@ The project was easy to build and get up and running with. After cloning the rep
 
 We decided on sticking with the discord bot project.
 
+
+## Onboarding experience (Oscar Hellgren)
+The project required some setup, poetry, which I had some problems with. But it wasn't that bad.
+1. Poetry was required to run the software, that actually took me a bit longer than it should've for stupid reasons but whatever.
+2. I think the document was relatively easy to follow.
+3. All other components were installed using Poetry commands.
+4. At first no, but then I fixed it.
+5. It ran quite well, all tests took about 3-4 seconds.
+
+We were satisfied with the project.
+
 ## Complexity
 
 ### on_command_error() (Shangxuan Tang)
@@ -41,6 +52,17 @@ Function: `actions_for64-118@bot/exts/filtering/_filter_lists/extension.py`
 3. The function’s purpose is to filter message attachments based on allowed or disallowed file extensions, and to set the appropriate “embed description” or actions if files are blocked.  
 4. Exceptions are taken into account, partly by Lizard but also by us when counting manually.
 5. The documentation is clear about the general filtering process, but some branches (like special handling for `.py` or text-like files in Snekbox mode) can be inferred only by reading the code.
+
+
+### humanize_delta() (Oscar Hellgren) 
+
+Function: `humanize_delta() in bot/utils/time.py`
+
+1. The CC of the function is 16. We used Lizard on `actions_for` and manually counted the same result.
+2. The function is somewhat complex and with an NLOC of 101.
+3. The function’s purpose is to translate times to human readable text, e.g 2025-02-21 to 2025-02-23 becomes "2 days". The complexity mostly comes from it accepting many different formats.
+4. Exceptions are taken into account, partly by Lizard but also by us when counting manually. My function doesn't have any though.
+5. I think so.
 
 ## Refactoring
 
