@@ -88,6 +88,36 @@ The refactored code is in branch [refactor/12-on-command-error](https://github.c
 - This would reduce nested `if` statements and improve readability, likely lowering the cyclomatic complexity from 25 closer to (estimated) 15–18.  
 - Potential drawbacks include needing more function calls and possibly introducing multiple return points.
 
+CC before:
+```shell
+# NLOC    CCN   token  PARAM  length  location  
+------------------------------------------------
+       4      1     35      2       4 __init__@50-53@bot/exts/filtering/_filter_lists/extension.py
+       3      1     17      2       3 get_filter_type@55-57@bot/exts/filtering/_filter_lists/extension.py
+       3      1     18      1       3 filter_types@60-62@bot/exts/filtering/_filter_lists/extension.py
+      42     25    422      2      55 actions_for@64-118@bot/exts/filtering/_filter_lists/extension.py
+```
+
+CC after:
+```shell
+# NLOC    CCN   token  PARAM  length  location  
+------------------------------------------------
+       4      1     35      2       4 __init__@50-53@bot/exts/filtering/_filter_lists/extension.py
+       3      1     17      2       3 get_filter_type@55-57@bot/exts/filtering/_filter_lists/extension.py
+       3      1     18      1       3 filter_types@60-62@bot/exts/filtering/_filter_lists/extension.py
+      20      9    210      2      25 actions_for@64-88@bot/exts/filtering/_filter_lists/extension.py
+       3      2     48      2       3 _get_all_extensions@90-92@bot/exts/filtering/_filter_lists/extension.py
+      10      5     96      3      10 _get_triggered_filters_and_allowed_ext@94-103@bot/exts/filtering/_filter_lists/extension.py
+       8      6     87      4       8 _compute_not_allowed_extensions@105-112@bot/exts/filtering/_filter_lists/extension.py
+      17      7    139      3      17 _set_dm_embed@114-130@bot/exts/filtering/_filter_lists/extension.py
+```
+
+The CC of actions_for is reduced from 25 to 9, a reduction of **64%**.
+
+The refactored code is in branch [refactor/18-refactor-actions-for](https://github.com/SEF-Group-25/discord-bot/tree/refactor/18-refactor-actions-for). Check the change using:
+```shell
+% git diff 60905d8 c0054be
+```
 ## deactivate_infraction() (Anton Yderberg)
 Refactoring the code should be very easy, the function is grouped into 4 major tasks. The majority of the complexity comes from the try/except blocks with multiple excepts and if statements in except block. Spliting these tasks and try/except blocks will drastically reduce CC.
 
