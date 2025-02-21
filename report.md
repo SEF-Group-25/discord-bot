@@ -1,9 +1,6 @@
 # Report for assignment 3
 
-This project is an experiment in complexity and coverage metrics, based on [Discord bot](https://github.com/python-discord/bot). The goals are to get an understanding and appreciation of the benefits and drawbacks of metrics and their tools, and to create new test cases or to enhance existing tests that improve statement or branch coverage.
-
 ## Onboarding experience (Shangxuan Tang)
-
 1. I don't have to install many additional tools to build the software except Poetry.
 2. Poetry is a widely-used Python packaging and dependency management tool, well documented on the official website.
 3. Other components are installed automatically by the Poetry commands.
@@ -26,15 +23,19 @@ We decided on sticking with the discord bot project.
 ## Complexity
 
 ### on_command_error() (Shangxuan Tang)
+
+Function: `on_command_error@65-149@./bot/exts/backend/error_handler.py`
+
 1. The CC is 20. Everyone gets the same result and nothing is unclear. The result given by Lizard is also 20, same as ours.  
 2. This function is with 76 NLOCs and CC of 20. It is both complex and long.  
 3. This function is used to handle the errors. There are lots of `if` statements to get the type of the error and handle the possible exception, which is tightly related to the high CC.  
 4. Exceptions in Python are taken into account by Lizard. The CC is counted 1 more time for each except block.  
 5. The documentation of the function is pretty clear as comments, but it does not cover all the branches in the function (Some of these branches are self-explained by function and variable names).
 
----
+### actions_for() (Zubair Yousafzai) 
 
-### actions_for() in extension.py (Zubair Yousafzai)
+Function: `actions_for64-118@bot/exts/filtering/_filter_lists/extension.py`
+
 1. The CC of the function is 25. We used Lizard on `actions_for` and manually counted the same result.
 2. The function is not only complex but also long with an NLOC of 42.
 3. The function’s purpose is to filter message attachments based on allowed or disallowed file extensions, and to set the appropriate “embed description” or actions if files are blocked.  
@@ -43,7 +44,32 @@ We decided on sticking with the discord bot project.
 
 ## Refactoring
 
-**Plan for refactoring complex code:**
+### on_command_error() (Shangxuan Tang)
+
+The code to handle command_not_found error and command_invoke_error are complex, so I extract two methods from these two code snippets. The reduction of CC is obvious, and these functions become easier to test. There is a recursive call in original function when handling command_not_found error. The refactor makes it more maintainable, and there is no drawback.
+
+CC before:
+```shell
+# NLOC    CCN   token  PARAM  length  location
+    76     20     412      3      85  on_command_error@65-149@bot/exts/backend/error_handler.py
+```
+
+CC after:
+```shell
+# NLOC    CCN   token  PARAM  length  location
+    54     12    249      3      60   on_command_error@65-124@bot/exts/backend/error_handler.py
+    14      5     90      2      16   handle_command_not_found@126-141@bot/exts/backend/error_handler.py
+    14      6    122      3      14   handle_command_invoke_error@143-156@bot/exts/backend/error_handler.py
+```
+
+The CC of on_command_error is reduced by 40%.
+
+The refactored code is in branch [refactor/12-on-command-error](https://github.com/SEF-Group-25/discord-bot/compare/refactor/12-on-command-error). Check the change using:
+```shell
+% git diff 60905d8 61e9ca3
+```
+
+### actions_for() (Zubair Yousafzai)
 
 - For `actions_for`, we can separate out logic related to `.py` extensions, text-like files, and Snekbox into smaller helper functions.  
 - This would reduce nested `if` statements and improve readability, likely lowering the cyclomatic complexity from 25 closer to (estimated) 15–18.  
@@ -59,11 +85,13 @@ Discord bot is already integrated with coverage tool `Coverage.py`, and the comm
 
 ### Own coverage tool
 
-Branch [feat/1-cov-error-handler](https://github.com/SEF-Group-25/discord-bot/tree/feat/1-cov-error-handler) shows the instrumented code.
-
+Branch [feat/1-cov-error-handler](https://github.com/SEF-Group-25/discord-bot/tree/feat/1-cov-error-handler) shows the instrumented code. Check the code and usage of tool using:
+```shell
+% git diff 60905d8 cd2f974
+```
 ### Evaluation
 
-We use a function `mark_branch(branch_id)` to instrument. When the branch is reached, it will write branch id to a log file. Then we can deal with log file, count which branch ids do not appear and compute the coverage rate.
+We use a function mark_branch(branch_id) to instrument. When the branch is reached, it will write branch id to a log file. Then we can deal with log file, count which branch ids do not appear and compute the coverage rate.
 
 Our tool only supports branches that can be added a function call at the beginning. If without refactor of source code, the tool can't support branches like:
 ```python
@@ -78,23 +106,25 @@ After excluding special cases or refactoring code, the result of our tool is acc
 
 ## Coverage improvement (Shangxuan Tang)
 
+### on_command_error()
+
 Requirements documentation for uncovered branches:
 
 ```python
 if await self.try_run_fixed_codeblock(ctx):
     return  # if the command body is within triple backticks, then try to invoke it
-
+    
 except Exception as err:    # error raised by those three functions in try block
-
-if isinstance(err, errors.CommandError):  
+    
+if isinstance(err, errors.CommandError):    
     # if the error is a CommandError, use on_command_error itself to handle it
     await self.on_command_error(ctx, err)
-
+    
 else:   # else it is a invoke error
     await self.on_command_error(ctx, errors.CommandInvokeError(err))
-
+    
 elif isinstance(e.original, Forbidden):
-    # handle_forbidden_from_block() handles ``discord.Forbidden`` 90001 errors,
+    # handle_forbidden_from_block() handles ``discord.Forbidden`` 90001 errors, 
 
 except Forbidden:
     # re-handle the error if it isn't a 90001 error.
@@ -102,7 +132,7 @@ except Forbidden:
 ```
 
 Report of old coverage:
-```bash
+```shell
 # Name                              Stmts   Miss Branch BrPart  Cover
 bot/exts/backend/error_handler.py     245     68     96      7    73%
 # Missing
@@ -110,20 +140,18 @@ bot/exts/backend/error_handler.py     245     68     96      7    73%
 ```
 
 Report of new coverage:
-```bash
+```shell
 # Name                              Stmts   Miss Branch BrPart  Cover
 bot/exts/backend/error_handler.py     245     58     96      5    77%
 # Missing
 25-29, 33-42, 47, 165-166, 209-210, 215, 221-223, 239-260, 268-269, 271-291, 334-342
 ```
-
-Test cases added:
-
-git diff ...
+There are 4 new test cases in branch [test/2-new-tests-error-handler](https://github.com/SEF-Group-25/discord-bot/tree/test/2-new-tests-error-handler). Check the test cases using:
+```shell
+% git diff 60905d8 f4ba935
 
 ## Coverage improvement (Zubair Yousafzai)
-
-Below are some requirement comments for uncovered code paths in `actions_for()` that we identified:
+Below are some requirement comments for uncovered code paths in `actions_for()` that I identified:
 
 ```python
 # Requirement 1: Disallow .py files with a special embed

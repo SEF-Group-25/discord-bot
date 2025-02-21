@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import AsyncMock, MagicMock, Mock, call, patch
 
+from discord import Forbidden, HTTPException
 from discord.ext.commands import errors
 from pydis_core.site_api import ResponseCodeError
 
@@ -34,29 +35,41 @@ class ErrorHandlerTests(unittest.IsolatedAsyncioTestCase):
         test_cases = (
             {
                 "try_silence_return": True,
+                "try_run_fixed_codeblock_return": False,
                 "called_try_get_tag": False
             },
             {
                 "try_silence_return": False,
+                "try_run_fixed_codeblock_return": False,
                 "called_try_get_tag": False
             },
             {
                 "try_silence_return": False,
+                "try_run_fixed_codeblock_return": False,
+                "called_try_get_tag": True
+            },
+            {
+                "try_silence_return": False,
+                "try_run_fixed_codeblock_return": True,
                 "called_try_get_tag": True
             }
         )
         self.cog.try_silence = AsyncMock()
         self.cog.try_get_tag = AsyncMock()
-        self.cog.try_run_fixed_codeblock = AsyncMock(return_value=False)
+        self.cog.try_run_fixed_codeblock = AsyncMock()
 
         for case in test_cases:
-            with self.subTest(try_silence_return=case["try_silence_return"], try_get_tag=case["called_try_get_tag"]):
+            with self.subTest(try_silence_return=case["try_silence_return"],
+                              try_run_fixed_codeblock_return=case["try_run_fixed_codeblock_return"],
+                              try_get_tag=case["called_try_get_tag"]):
                 self.ctx.reset_mock()
                 self.cog.try_silence.reset_mock(return_value=True)
+                self.cog.try_run_fixed_codeblock.reset_mock(return_value=True)
                 self.cog.try_get_tag.reset_mock()
                 self.ctx.invoked_from_error_handler = False
 
                 self.cog.try_silence.return_value = case["try_silence_return"]
+                self.cog.try_run_fixed_codeblock.return_value = case["try_run_fixed_codeblock_return"]
                 self.ctx.channel.id = 1234
 
                 self.assertIsNone(await self.cog.on_command_error(self.ctx, error))
@@ -66,11 +79,52 @@ class ErrorHandlerTests(unittest.IsolatedAsyncioTestCase):
                 if case["try_silence_return"]:
                     self.cog.try_get_tag.assert_not_awaited()
                     self.cog.try_silence.assert_awaited_once()
+                    self.cog.try_run_fixed_codeblock.assert_not_awaited()
+                elif case["try_run_fixed_codeblock_return"]:
+                    self.cog.try_get_tag.assert_not_awaited()
+                    self.cog.try_silence.assert_awaited_once()
+                    self.cog.try_run_fixed_codeblock.assert_awaited_once()
                 else:
                     self.cog.try_silence.assert_awaited_once()
                     self.cog.try_get_tag.assert_awaited_once()
+                    self.cog.try_run_fixed_codeblock.assert_awaited_once()
 
                 self.ctx.send.assert_not_awaited()
+
+    async def test_error_handler_command_not_found_error_not_invoked_by_handler_exception(self):
+        """Mock exception when trying first (un)silence channel"""
+        error = errors.CommandNotFound()
+
+        self.cog.try_silence = AsyncMock()
+        self.cog.try_get_tag = AsyncMock()
+        self.cog.try_run_fixed_codeblock = AsyncMock()
+        # on_command_error_mock = AsyncMock()
+
+        test_cases = (
+            {
+                "exception": "CommandError"
+            },
+            {
+                "exception": "HTTPException"
+            }
+        )
+
+        for case in test_cases:
+            with self.subTest(exception_mock=case["exception"]):
+                self.ctx.reset_mock()
+                self.cog.try_silence.reset_mock(return_value=True)
+                self.ctx.invoked_from_error_handler = False
+
+                if case["exception"] == "CommandError":
+                    err = errors.CommandError()
+                    self.cog.try_silence.side_effect = errors.CommandError()
+                else:
+                    err = HTTPException(AsyncMock(), AsyncMock())
+                    self.cog.try_silence.side_effect = HTTPException(AsyncMock(), AsyncMock())
+
+                self.ctx.channel.id = 1234
+
+                self.assertIsNone(await self.cog.on_command_error(self.ctx, error))
 
     async def test_error_handler_command_not_found_error_invoked_by_handler(self):
         """Should do nothing when error is `CommandNotFound` and have attribute `invoked_from_error_handler`."""
@@ -145,6 +199,12 @@ class ErrorHandlerTests(unittest.IsolatedAsyncioTestCase):
                     case["expect_mock_call"].assert_awaited_once_with(
                         self.ctx, case["args"][1].original
                     )
+
+    async def test_error_handler_command_invoke_error_forbidden(self):
+        self.cog.handle_unexpected_error = AsyncMock()
+        e = errors.CommandInvokeError(Forbidden(AsyncMock(), AsyncMock()))
+        self.assertIsNone(await self.cog.on_command_error(self.ctx, e))
+        self.cog.handle_unexpected_error.assert_awaited_once()
 
     async def test_error_handler_conversion_error(self):
         """Should call `handle_api_error` or `handle_unexpected_error` depending on original error."""
