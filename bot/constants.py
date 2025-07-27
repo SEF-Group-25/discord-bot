@@ -89,6 +89,8 @@ class _Channels(EnvConfig, env_prefix="channels_"):
     incidents: int = 714214212200562749
     incidents_archive: int = 720668923636351037
     mod_alerts: int = 473092532147060736
+    # Actually a thread, but for bootstrap purposes we treat it as a channel
+    rule_alerts: int = 1386490058739290182
     mod_meta: int = 775412552795947058
     mods: int = 305126844661760000
     nominations: int = 822920136150745168
@@ -160,6 +162,7 @@ class _Roles(EnvConfig, env_prefix="roles_"):
     mod_team: int = 267629731250176001
     owners: int = 267627879762755584
     project_leads: int = 815701647526330398
+    founders: int = 1069394343867199590
 
     # Code Jam
     jammers: int = 737249140966162473
@@ -359,9 +362,9 @@ PythonNews = _PythonNews()
 class _VoiceGate(EnvConfig, env_prefix="voice_gate_"):
 
     delete_after_delay: int = 60
-    minimum_activity_blocks: int = 3
+    minimum_activity_blocks: int = 9 # 1h30m
     minimum_days_member: int = 3
-    minimum_messages: int = 50
+    minimum_messages: int = 25
 
 
 VoiceGate = _VoiceGate()

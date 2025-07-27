@@ -2,11 +2,13 @@ import textwrap
 import typing as t
 from abc import abstractmethod
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime, timedelta
 from gettext import ngettext
 
 import arrow
 import dateutil.parser
 import discord
+from async_rediscache import RedisCache
 from discord.ext.commands import Context
 from pydis_core.site_api import ResponseCodeError
 from pydis_core.utils import scheduling
@@ -24,18 +26,28 @@ from bot.utils.modlog import send_log_message
 
 log = get_logger(__name__)
 
+AUTOMATED_TIDY_UP_HOURS = 8
+
+# Error when trying to delete a message in an archived thread.
+ARCHIVED_THREAD_ERROR = 50083
 
 class InfractionScheduler:
     """Handles the application, pardoning, and expiration of infractions."""
 
+    messages_to_tidy: RedisCache = RedisCache()
+
     def __init__(self, bot: Bot, supported_infractions: t.Container[str]):
         self.bot = bot
         self.scheduler = scheduling.Scheduler(self.__class__.__name__)
+        self.tidy_up_scheduler = scheduling.Scheduler(
+            f"{self.__class__.__name__}TidyUp"
+        )
         self.supported_infractions = supported_infractions
 
     async def cog_unload(self) -> None:
         """Cancel scheduled tasks."""
         self.scheduler.cancel_all()
+        self.tidy_up_scheduler.cancel_all()
 
     @property
     def mod_log(self) -> ModLog:
@@ -76,7 +88,52 @@ class InfractionScheduler:
 
             self.scheduler.schedule_at(next_reschedule_point, -1, self.cog_load())
 
-        log.trace("Done rescheduling")
+        log.trace("Done rescheduling expirations, scheduling tidy up tasks.")
+
+        for key, expire_at in await self.messages_to_tidy.items():
+            channel_id, message_id = map(int, key.split(":"))
+            expire_at = dateutil.parser.isoparse(expire_at)
+
+            log.trace(
+                "Scheduling tidy up for message %s in channel %s at %s",
+                message_id, channel_id, expire_at
+            )
+
+            self.tidy_up_scheduler.schedule_at(
+                expire_at,
+                message_id,
+                self._delete_infraction_message(channel_id, message_id)
+            )
+
+    async def _delete_infraction_message(
+        self,
+        channel_id: int,
+        message_id: int
+    ) -> None:
+        """
+        Delete a message in the given channel.
+
+        This is used to delete infraction messages after a certain period of time.
+        """
+        try:
+            partial_channel = self.bot.get_partial_messageable(channel_id)
+            partial_message = partial_channel.get_partial_message(message_id)
+            await partial_message.delete()
+            log.trace(f"Deleted infraction message {message_id} in channel {channel_id}.")
+        except discord.NotFound:
+            log.warning(f"Channel or message {message_id} not found in channel {channel_id}.")
+        except discord.Forbidden:
+            log.info(f"Bot lacks permissions to delete message {message_id} in channel {channel_id}.")
+        except discord.HTTPException as e:
+            if e.code == ARCHIVED_THREAD_ERROR:
+                log.info(
+                    f"Cannot delete message {message_id} in channel {channel_id} because the thread is archived."
+                )
+            else:
+                log.exception(f"Issue during scheduled deletion of message {message_id} in channel {channel_id}.")
+                return  # Keep the task in Redis on HTTP errors
+
+        await self.messages_to_tidy.delete(f"{channel_id}:{message_id}")
 
     async def reapply_infraction(
         self,
@@ -269,7 +326,26 @@ class InfractionScheduler:
         # Send a confirmation message to the invoking context.
         log.trace(f"Sending infraction #{id_} confirmation message.")
         mentions = discord.AllowedMentions(users=[user], roles=False)
-        await ctx.send(f"{dm_result}{confirm_msg}{infr_message}.", allowed_mentions=mentions)
+        sent_msg = await ctx.send(f"{dm_result}{confirm_msg}{infr_message}.", allowed_mentions=mentions)
+
+        # Only tidy up bot issued infractions in non-mod channels.
+        if infraction["actor"] == self.bot.user.id and not is_mod_channel(ctx.channel):
+            expire_message_time = datetime.now(UTC) + timedelta(hours=AUTOMATED_TIDY_UP_HOURS)
+
+            log.trace(f"Scheduling message tidy for infraction #{id_} in {AUTOMATED_TIDY_UP_HOURS} hours.")
+
+            # Schedule the message to be deleted after a certain period of time.
+            self.tidy_up_scheduler.schedule_at(
+                expire_message_time,
+                sent_msg.id,
+                self._delete_infraction_message(ctx.channel.id, sent_msg.id)
+            )
+
+            # Persist to Redis to handle for bot restarts.
+            await self.messages_to_tidy.set(
+                f"{ctx.channel.id}:{sent_msg.id}",
+                expire_message_time.isoformat(),
+            )
 
         if jump_url is None:
             jump_url = "(Infraction issued in a ModMail channel.)"

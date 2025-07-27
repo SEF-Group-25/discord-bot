@@ -87,7 +87,7 @@ SNEKBOX_ROLES = (Roles.helpers, Roles.moderators, Roles.admins, Roles.owners, Ro
 REDO_EMOJI = "\U0001f501"  # :repeat:
 REDO_TIMEOUT = 30
 
-SupportedPythonVersions = Literal["3.12", "3.13", "3.13t"]
+SupportedPythonVersions = Literal["3.13", "3.13t", "3.14"]
 
 class FilteredFiles(NamedTuple):
     allowed: list[FileAttachment]
@@ -569,7 +569,29 @@ class Snekbox(Cog):
                 break
             log.info(f"Re-evaluating code from message {ctx.message.id}:\n{job}")
 
-    @command(name="eval", aliases=("e",), usage="[python_version] <code, ...>")
+    @command(
+        name="eval",
+        aliases=("e",),
+        usage="[python_version] <code, ...>",
+        help=f"""
+            Run Python code and get the results.
+
+            This command supports multiple lines of code, including formatted code blocks.
+            Code can be re-evaluated by editing the original message within 10 seconds and
+            clicking the reaction that subsequently appears.
+
+            The starting working directory `/home`, is a writeable temporary file system.
+            Files created, excluding names with leading underscores, will be uploaded in the response.
+
+            If multiple codeblocks are in a message, all of them will be joined and evaluated,
+            ignoring the text outside them.
+
+            The currently supported versions are {", ".join(get_args(SupportedPythonVersions))}.
+
+            We've done our best to make this sandboxed, but do let us know if you manage to find an
+            issue with it!
+        """
+    )
     @guild_only()
     @redirect_output(
         destination_channel=Channels.bot_commands,
@@ -585,30 +607,32 @@ class Snekbox(Cog):
         *,
         code: CodeblockConverter
     ) -> None:
-        """
-        Run Python code and get the results.
-
-        This command supports multiple lines of code, including formatted code blocks.
-        Code can be re-evaluated by editing the original message within 10 seconds and
-        clicking the reaction that subsequently appears.
-
-        The starting working directory `/home`, is a writeable temporary file system.
-        Files created, excluding names with leading underscores, will be uploaded in the response.
-
-        If multiple codeblocks are in a message, all of them will be joined and evaluated,
-        ignoring the text outside them.
-
-        The currently supported verisons are 3.12, 3.13, and 3.13t.
-
-        We've done our best to make this sandboxed, but do let us know if you manage to find an
-        issue with it!
-        """
+        """Run Python code and get the results."""
         code: list[str]
-        python_version = python_version or "3.12"
+        python_version = python_version or get_args(SupportedPythonVersions)[0]
         job = EvalJob.from_code("\n".join(code)).as_version(python_version)
         await self.run_job(ctx, job)
 
-    @command(name="timeit", aliases=("ti",), usage="[python_version] [setup_code] <code, ...>")
+    @command(
+        name="timeit",
+        aliases=("ti",),
+        usage="[python_version] [setup_code] <code, ...>",
+        help=f"""
+            Profile Python code to find execution time.
+
+            This command supports multiple lines of code, including formatted code blocks.
+            Code can be re-evaluated by editing the original message within 10 seconds and
+            clicking the reaction that subsequently appears.
+
+            If multiple formatted codeblocks are provided, the first one will be the setup code,
+            which will not be timed. The remaining codeblocks will be joined together and timed.
+
+            The currently supported versions are {", ".join(get_args(SupportedPythonVersions))}.
+
+            We've done our best to make this sandboxed, but do let us know if you manage to find an
+            issue with it!
+        """
+    )
     @guild_only()
     @redirect_output(
         destination_channel=Channels.bot_commands,
@@ -624,23 +648,9 @@ class Snekbox(Cog):
         *,
         code: CodeblockConverter
     ) -> None:
-        """
-        Profile Python Code to find execution time.
-
-        This command supports multiple lines of code, including code wrapped inside a formatted code
-        block. Code can be re-evaluated by editing the original message within 10 seconds and
-        clicking the reaction that subsequently appears.
-
-        If multiple formatted codeblocks are provided, the first one will be the setup code, which will
-        not be timed. The remaining codeblocks will be joined together and timed.
-
-        The currently supported verisons are 3.12, 3.13, and 3.13t.
-
-        We've done our best to make this sandboxed, but do let us know if you manage to find an
-        issue with it!
-        """
+        """Profile Python Code to find execution time."""
         code: list[str]
-        python_version = python_version or "3.12"
+        python_version = python_version or get_args(SupportedPythonVersions)[0]
         args = self.prepare_timeit_input(code)
         job = EvalJob(args, version=python_version, name="timeit")
 

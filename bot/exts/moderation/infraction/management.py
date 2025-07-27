@@ -237,7 +237,7 @@ class ModManagement(commands.Cog):
                     capped, duration = _utils.cap_timeout_duration(expiry)
                     if capped:
                         await _utils.notify_timeout_cap(self.bot, ctx, user)
-                    await user.edit(reason=reason, timed_out_until=expiry)
+                    await user.edit(reason=reason, timed_out_until=duration)
 
             log_text += f"""
                 Previous expiry: {time.until_expiration(infraction['expires_at'])}
@@ -421,7 +421,8 @@ class ModManagement(commands.Cog):
             prefix=f"{prefix}\n",
             empty=True,
             max_lines=3,
-            max_size=1000
+            max_size=1000,
+            allowed_roles=constants.MODERATION_ROLES,
         )
 
     def infraction_to_string(self, infraction: dict[str, t.Any], ignore_fields: tuple[str, ...]) -> str:
